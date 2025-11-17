@@ -8,7 +8,7 @@ import config
 
 st.set_page_config(
     page_title="Admin & Debug",
-    page_icon="⚙️",
+    page_icon="",
     layout="wide"
 )
 
@@ -20,12 +20,13 @@ st.markdown("---")
 st.warning("**Admin Area**: These tools can modify the database structure and data. Use with caution!")
 
 # Create tabs
-tab1, tab2, tab3, tab4 = st.tabs([
-    "Database Info", 
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "Database Info",
+    "User Privileges",
     "Triggers", 
     "Procedures", 
-    "Functions", 
-    # "Integrity Checks"
+    "Functions",
+    "Query Examples"
 ])
 
 # Tab 1: Database Info
@@ -35,9 +36,9 @@ with tab1:
     # Connection test
     status, msg = db_utils.test_connection()
     if status:
-        st.success(f"{msg}")
+        st.success(msg)
     else:
-        st.error(f"{msg}")
+        st.error(msg)
     
     st.markdown("---")
     
@@ -119,8 +120,39 @@ with tab1:
             except Exception as e:
                 st.error(f"Error: {e}")
 
-# Tab 2: Triggers
+# Tab 2: User Privileges
 with tab2:
+    st.subheader("Database Users and Privileges")
+    
+    st.info("""
+    The canteen database has 4 types of users with different privilege levels:
+    - **Admin**: Full database control
+    - **Manager**: Data manipulation only
+    - **Staff**: Limited CRUD operations
+    - **Read-Only**: View-only access for reporting
+    """)
+    
+
+    # Privilege comparison table
+    st.markdown("### Privilege Comparison")
+    
+    privilege_data = {
+        'Privilege': ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'EXECUTE'],
+        'Admin': ['Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'],
+        'Manager': ['Yes', 'Yes', 'Yes', 'Yes', 'No', 'No', 'No', 'Yes'],
+        'Staff': ['Yes (Limited)', 'Yes (Limited)', 'Yes (Limited)', 'No', 'No', 'No', 'No', 'Yes'],
+        'Read-Only': ['Yes', 'No', 'No', 'No', 'No', 'No', 'No', 'No']
+    }
+    
+    privilege_df = pd.DataFrame(privilege_data)
+    st.dataframe(privilege_df, use_container_width=True, hide_index=True)
+    
+    st.markdown("---")
+    
+
+
+# Tab 3: Triggers
+with tab3:
     st.subheader("Database Triggers")
     
     try:
@@ -131,7 +163,7 @@ with tab2:
             
             # Display triggers in expandable sections
             for idx, trigger in triggers.iterrows():
-                with st.expander(f"🔹 {trigger['Trigger']} - {trigger['Event']} on {trigger['Table']}"):
+                with st.expander(f"{trigger['Trigger']} - {trigger['Event']} on {trigger['Table']}"):
                     col1, col2 = st.columns(2)
                     
                     with col1:
@@ -207,8 +239,8 @@ with tab2:
         else:
             st.success("All items have healthy stock levels")
 
-# Tab 3: Procedures
-with tab3:
+# Tab 4: Procedures
+with tab4:
     st.subheader("Stored Procedures")
     
     try:
@@ -222,7 +254,7 @@ with tab3:
             
             # Display procedures
             for idx, proc in procedures.iterrows():
-                with st.expander(f"🔹 {proc['Name']} ({proc['Type']})"):
+                with st.expander(f"{proc['Name']} ({proc['Type']})"):
                     col1, col2 = st.columns(2)
                     
                     with col1:
@@ -285,7 +317,7 @@ with tab3:
             test_item = st.number_input("Item ID", min_value=1, value=1)
             test_qty = st.number_input("Quantity", min_value=1, value=1)
             
-            if st.button("🛒 Test Place Order", key="test_place_order"):
+            if st.button("Test Place Order", key="test_place_order"):
                 try:
                     result = db_utils.call_procedure(
                         'place_new_order',
@@ -295,9 +327,58 @@ with tab3:
                         st.success(f"Order placed! Order ID: {result[0][0]}")
                 except Exception as e:
                     st.error(f"Error: {e}")
+    
+    st.markdown("---")
+    
+    # DELETE procedures
+    st.subheader("Delete Operations Procedures")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        with st.expander("Test delete_order"):
+            st.markdown("Delete an order (restores stock & refunds wallet)")
+            
+            test_order_id = st.number_input("Order ID to Delete", min_value=1, value=1, key="del_order")
+            
+            if st.button("Test Delete Order", key="test_delete_order"):
+                try:
+                    result = db_utils.call_procedure('delete_order', (test_order_id,))
+                    if result:
+                        st.success(result[0][0])
+                except Exception as e:
+                    st.error(f"Error: {e}")
+    
+    with col2:
+        with st.expander("Test delete_user"):
+            st.markdown("Delete a user (only if no orders)")
+            
+            test_user_del = st.number_input("User ID to Delete", min_value=1, value=1, key="del_user")
+            
+            if st.button("Test Delete User", key="test_delete_user"):
+                try:
+                    result = db_utils.call_procedure('delete_user', (test_user_del,))
+                    if result:
+                        st.success(result[0][0])
+                except Exception as e:
+                    st.error(f"Error: {e}")
+    
+    with col3:
+        with st.expander("Test delete_menu_item"):
+            st.markdown("Delete a menu item (soft/hard delete)")
+            
+            test_item_del = st.number_input("Item ID to Delete", min_value=1, value=1, key="del_item")
+            
+            if st.button("Test Delete Item", key="test_delete_item"):
+                try:
+                    result = db_utils.call_procedure('delete_menu_item', (test_item_del,))
+                    if result:
+                        st.success(result[0][0])
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
-# Tab 4: Functions
-with tab4:
+# Tab 5: Functions
+with tab5:
     st.subheader("Stored Functions")
     
     try:
@@ -311,7 +392,7 @@ with tab4:
             
             # Display functions
             for idx, func in functions.iterrows():
-                with st.expander(f"🔹 {func['Name']} ({func['Type']})"):
+                with st.expander(f"{func['Name']} ({func['Type']})"):
                     col1, col2 = st.columns(2)
                     
                     with col1:
@@ -384,151 +465,185 @@ with tab4:
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-# Tab 5: Integrity Checks
-# with tab5:
-    st.subheader("Data Integrity Checks")
+# Tab 6: Query Examples
+with tab6:
+    st.subheader("SQL Query Examples")
     
-    st.markdown("""
-    These checks verify the referential integrity and data consistency of the database.
-    All checks should return 0 violations for a healthy database.
-    """)
+    st.info("This section demonstrates the different types of queries used in the application")
     
-    if st.button("Run All Integrity Checks", use_container_width=True, type="primary"):
+    # Nested Query Example
+    st.markdown("### 1. Nested Query Example")
+    st.markdown("**Purpose**: Find users who have spent more than the average order amount")
+    
+    nested_query = """
+    SELECT 
+        u.name,
+        u.srn,
+        SUM(o.total_amount) as total_spent
+    FROM Users u
+    JOIN Orders o ON u.user_id = o.user_id
+    WHERE o.payment_status = 'completed'
+    GROUP BY u.user_id, u.name, u.srn
+    HAVING total_spent > (
+        SELECT AVG(total_amount) 
+        FROM Orders 
+        WHERE payment_status = 'completed'
+    )
+    ORDER BY total_spent DESC
+    """
+    
+    st.code(nested_query, language='sql')
+    
+    if st.button("Run Nested Query", key="run_nested"):
         try:
-            # Test 1: Orders without valid users
-            test1 = db_utils.fetch_query("""
-                SELECT 
-                    'Orders without valid user' as test,
-                    COUNT(*) as violations
-                FROM Orders o 
-                LEFT JOIN Users u ON o.user_id = u.user_id 
-                WHERE u.user_id IS NULL
-            """)
-            
-            # Test 2: Order_Items without valid orders
-            test2 = db_utils.fetch_query("""
-                SELECT 
-                    'Order_Items without valid order' as test,
-                    COUNT(*) as violations
-                FROM Order_Items oi 
-                LEFT JOIN Orders o ON oi.order_id = o.order_id 
-                WHERE o.order_id IS NULL
-            """)
-            
-            # Test 3: Order_Items without valid menu items
-            test3 = db_utils.fetch_query("""
-                SELECT 
-                    'Order_Items without valid menu item' as test,
-                    COUNT(*) as violations
-                FROM Order_Items oi 
-                LEFT JOIN Menu_Items mi ON oi.item_id = mi.item_id 
-                WHERE mi.item_id IS NULL
-            """)
-            
-            # Test 4: Menu_Items without valid categories
-            test4 = db_utils.fetch_query("""
-                SELECT 
-                    'Menu_Items without valid category' as test,
-                    COUNT(*) as violations
-                FROM Menu_Items mi 
-                LEFT JOIN Categories c ON mi.category_id = c.category_id 
-                WHERE c.category_id IS NULL
-            """)
-            
-            # Test 5: Negative wallet balances
-            test5 = db_utils.fetch_query("""
-                SELECT 
-                    'Users with negative balance' as test,
-                    COUNT(*) as violations
-                FROM Users
-                WHERE wallet_balance < 0
-            """)
-            
-            # Test 6: Duplicate SRNs
-            test6 = db_utils.fetch_query("""
-                SELECT 
-                    'Duplicate SRNs' as test,
-                    COUNT(*) - COUNT(DISTINCT srn) as violations
-                FROM Users
-            """)
-            
-            # Combine all tests
-            all_tests = pd.concat([test1, test2, test3, test4, test5, test6], ignore_index=True)
-            
-            # Display results
-            st.subheader("Integrity Check Results")
-            
-            # Color code the results
-            def highlight_violations(row):
-                if row['violations'] > 0:
-                    return ['background-color: #ffcccc'] * len(row)
-                else:
-                    return ['background-color: #ccffcc'] * len(row)
-            
-            styled_df = all_tests.style.apply(highlight_violations, axis=1)
-            st.dataframe(styled_df, use_container_width=True, hide_index=True)
-            
-            # Summary
-            total_violations = all_tests['violations'].sum()
-            
-            if total_violations == 0:
-                st.success("All integrity checks passed! Database is consistent.")
+            result = db_utils.fetch_query(nested_query)
+            if not result.empty:
+                st.success(f"Found {len(result)} users spending above average")
+                st.dataframe(result, use_container_width=True, hide_index=True)
             else:
-                st.error(f"Found {total_violations} total violation(s). Please review and fix.")
-            
-            # Export
-            csv = all_tests.to_csv(index=False)
-            st.download_button(
-                label="Download Integrity Report",
-                data=csv,
-                file_name="integrity_check_report.csv",
-                mime="text/csv"
-            )
-        
+                st.info("No results found")
         except Exception as e:
-            st.error(f"Error running integrity checks: {e}")
+            st.error(f"Error: {e}")
     
     st.markdown("---")
     
-    # Additional checks
-    st.subheader("Additional Data Quality Checks")
+    # JOIN Query Example
+    st.markdown("### 2. JOIN Query Example")
+    st.markdown("**Purpose**: Get complete order details with customer and item information")
     
-    col1, col2 = st.columns(2)
+    join_query = """
+    SELECT 
+        o.order_id,
+        u.name as customer_name,
+        u.srn,
+        mi.item_name,
+        c.category_name,
+        oi.quantity,
+        oi.unit_price,
+        oi.subtotal,
+        o.order_status
+    FROM Orders o
+    JOIN Users u ON o.user_id = u.user_id
+    JOIN Order_Items oi ON o.order_id = oi.order_id
+    JOIN Menu_Items mi ON oi.item_id = mi.item_id
+    JOIN Categories c ON mi.category_id = c.category_id
+    ORDER BY o.order_date DESC
+    LIMIT 10
+    """
     
-    with col1:
-        if st.button("Check Invalid Emails", use_container_width=True):
-            try:
-                invalid_emails = db_utils.fetch_query("""
-                    SELECT user_id, name, email
-                    FROM Users
-                    WHERE email NOT REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
-                """)
+    st.code(join_query, language='sql')
+    
+    if st.button("Run JOIN Query", key="run_join"):
+        try:
+            result = db_utils.fetch_query(join_query)
+            if not result.empty:
+                st.success(f"Retrieved {len(result)} order items")
+                st.dataframe(result, use_container_width=True, hide_index=True)
+            else:
+                st.info("No results found")
+        except Exception as e:
+            st.error(f"Error: {e}")
+    
+    st.markdown("---")
+    
+    # Aggregate Query Example
+    st.markdown("### 3. Aggregate Query Example")
+    st.markdown("**Purpose**: Calculate various statistics using aggregate functions")
+    
+    aggregate_query = """
+    SELECT 
+        c.category_name,
+        COUNT(DISTINCT mi.item_id) as item_count,
+        COUNT(DISTINCT oi.order_id) as order_count,
+        SUM(oi.quantity) as total_quantity_sold,
+        SUM(oi.subtotal) as total_revenue,
+        AVG(mi.price) as avg_item_price,
+        MIN(mi.price) as min_price,
+        MAX(mi.price) as max_price
+    FROM Categories c
+    JOIN Menu_Items mi ON c.category_id = mi.category_id
+    LEFT JOIN Order_Items oi ON mi.item_id = oi.item_id
+    GROUP BY c.category_id, c.category_name
+    ORDER BY total_revenue DESC
+    """
+    
+    st.code(aggregate_query, language='sql')
+    
+    if st.button("Run Aggregate Query", key="run_aggregate"):
+        try:
+            result = db_utils.fetch_query(aggregate_query)
+            if not result.empty:
+                st.success(f"Category statistics calculated")
                 
-                if not invalid_emails.empty:
-                    st.warning(f"Found {len(invalid_emails)} invalid email(s)")
-                    st.dataframe(invalid_emails, use_container_width=True, hide_index=True)
-                else:
-                    st.success("All emails are valid")
-            except Exception as e:
-                st.error(f"Error: {e}")
-    
-    with col2:
-        if st.button("Check Orphaned Records", use_container_width=True):
-            try:
-                # Check for items with no orders
-                orphaned = db_utils.fetch_query("""
-                    SELECT mi.item_id, mi.item_name
-                    FROM Menu_Items mi
-                    LEFT JOIN Order_Items oi ON mi.item_id = oi.item_id
-                    WHERE oi.item_id IS NULL
-                """)
+                # Format currency columns
+                for col in ['total_revenue', 'avg_item_price', 'min_price', 'max_price']:
+                    if col in result.columns:
+                        result[col] = result[col].apply(lambda x: f"₹{x:.2f}" if pd.notna(x) else "₹0.00")
                 
-                if not orphaned.empty:
-                    st.info(f"Found {len(orphaned)} item(s) with no orders yet")
-                    st.dataframe(orphaned, use_container_width=True, hide_index=True)
-                else:
-                    st.success("All items have been ordered at least once")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-
+                st.dataframe(result, use_container_width=True, hide_index=True)
+            else:
+                st.info("No results found")
+        except Exception as e:
+            st.error(f"Error: {e}")
+    
+    st.markdown("---")
+    
+    # Additional complex queries
+    st.markdown("### 4. Additional Query Examples")
+    
+    query_examples = {
+        "Top Customers by Orders": """
+        SELECT 
+            u.name,
+            u.user_type,
+            COUNT(o.order_id) as order_count,
+            SUM(o.total_amount) as total_spent,
+            AVG(o.total_amount) as avg_order_value
+        FROM Users u
+        JOIN Orders o ON u.user_id = o.user_id
+        WHERE o.payment_status = 'completed'
+        GROUP BY u.user_id, u.name, u.user_type
+        ORDER BY order_count DESC
+        LIMIT 5
+        """,
+        
+        "Items Never Ordered": """
+        SELECT 
+            mi.item_name,
+            c.category_name,
+            mi.price,
+            mi.stock
+        FROM Menu_Items mi
+        JOIN Categories c ON mi.category_id = c.category_id
+        LEFT JOIN Order_Items oi ON mi.item_id = oi.item_id
+        WHERE oi.item_id IS NULL
+        """,
+        
+        "Daily Revenue Trend": """
+        SELECT 
+            DATE(order_date) as order_day,
+            COUNT(*) as order_count,
+            SUM(total_amount) as daily_revenue,
+            AVG(total_amount) as avg_order_value
+        FROM Orders
+        WHERE payment_status = 'completed'
+        GROUP BY DATE(order_date)
+        ORDER BY order_day DESC
+        LIMIT 7
+        """
+    }
+    
+    selected_example = st.selectbox("Select Query Example", list(query_examples.keys()))
+    
+    st.code(query_examples[selected_example], language='sql')
+    
+    if st.button("Run Selected Query", key="run_example"):
+        try:
+            result = db_utils.fetch_query(query_examples[selected_example])
+            if not result.empty:
+                st.success(f"Query executed successfully - {len(result)} rows returned")
+                st.dataframe(result, use_container_width=True, hide_index=True)
+            else:
+                st.info("No results found")
+        except Exception as e:
+            st.error(f"Error: {e}")

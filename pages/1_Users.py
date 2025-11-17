@@ -5,15 +5,38 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import db_utils
 import config
+import access_control
 
 st.set_page_config(
     page_title="Users Management",
-    page_icon="👥",
+    page_icon="",
     layout="wide"
 )
 
+# Check page access
+if not access_control.check_page_access('Users'):
+    access_control.render_access_denied('Users')
+    st.stop()
+
+# Show current role info
+access_control.show_current_role_info()
+
 st.title("Users Management")
 st.markdown("Manage students, faculty, and staff information and wallets")
+st.markdown("---")
+
+# Show permissions for this page
+with st.expander("My Permissions on This Page"):
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        access_control.render_permission_badge('can_create')
+    with col2:
+        access_control.render_permission_badge('can_update')
+    with col3:
+        access_control.render_permission_badge('can_delete')
+    with col4:
+        access_control.render_permission_badge('can_view_all')
+
 st.markdown("---")
 
 # Create tabs
@@ -93,15 +116,6 @@ with tab1:
                     )
                 }
             )
-            
-            # Export option
-            # csv = users_df.to_csv(index=False)
-            # st.download_button(
-            #     label="📥 Download as CSV",
-            #     data=csv,
-            #     file_name="users_export.csv",
-            #     mime="text/csv"
-            # )
         else:
             st.info("No users found matching the criteria")
     
@@ -112,165 +126,183 @@ with tab1:
 with tab2:
     st.subheader("Add New User")
     
-    with st.form("add_user_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            srn = st.text_input("SRN *", placeholder="e.g., PES2UG23CS001")
-            name = st.text_input("Full Name *", placeholder="e.g., John Doe")
-            email = st.text_input("Email *", placeholder="e.g., john.doe@pes.edu")
-        
-        with col2:
-            phone = st.text_input("Phone Number", placeholder="e.g., 9876543210")
-            user_type = st.selectbox("User Type *", ["student", "faculty", "staff"])
-            wallet_balance = st.number_input("Initial Wallet Balance", min_value=0.0, value=0.0, step=50.0)
-        
-        submitted = st.form_submit_button("Add User", use_container_width=True)
-        
-        if submitted:
-            if not srn or not name or not email:
-                st.error("Please fill in all required fields marked with *")
-            else:
-                # Validate phone (if provided)
-                if phone and (len(phone) != 10 or not phone.isdigit()):
-                    st.error("Phone number must be exactly 10 digits")
+    # Check if user has create permission
+    if not db_utils.check_permission('can_create'):
+        st.error("You don't have permission to create new users")
+        st.info("Required permission: can_create")
+        st.info("Contact an administrator or manager to add new users.")
+    else:
+        with st.form("add_user_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                srn = st.text_input("SRN *", placeholder="e.g., PES2UG23CS001")
+                name = st.text_input("Full Name *", placeholder="e.g., John Doe")
+                email = st.text_input("Email *", placeholder="e.g., john.doe@pes.edu")
+            
+            with col2:
+                phone = st.text_input("Phone Number", placeholder="e.g., 9876543210")
+                user_type = st.selectbox("User Type *", ["student", "faculty", "staff"])
+                wallet_balance = st.number_input("Initial Wallet Balance", min_value=0.0, value=0.0, step=50.0)
+            
+            submitted = st.form_submit_button("Add User", use_container_width=True)
+            
+            if submitted:
+                if not srn or not name or not email:
+                    st.error("Please fill in all required fields marked with *")
                 else:
-                    # Insert user
-                    query = """
-                    INSERT INTO Users (srn, name, email, phone, user_type, wallet_balance)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """
-                    params = (srn, name, email, phone if phone else None, user_type, wallet_balance)
-                    
-                    success = db_utils.execute_query(query, params)
-                    
-                    if success:
-                        st.success(f"User {name} added successfully!")
+                    # Validate phone (if provided)
+                    if phone and (len(phone) != 10 or not phone.isdigit()):
+                        st.error("Phone number must be exactly 10 digits")
                     else:
-                        st.error("Failed to add user. Check if SRN or email already exists.")
+                        # Insert user
+                        query = """
+                        INSERT INTO Users (srn, name, email, phone, user_type, wallet_balance)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        """
+                        params = (srn, name, email, phone if phone else None, user_type, wallet_balance)
+                        
+                        success = db_utils.execute_query(query, params)
+                        
+                        if success:
+                            st.success(f"User {name} added successfully!")
+                        else:
+                            st.error("Failed to add user. Check if SRN or email already exists.")
 
 # Tab 3: Wallet Management
 with tab3:
     st.subheader("Wallet Management")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### Add Funds")
+    # Check if user has update permission
+    if not db_utils.check_permission('can_update'):
+        st.error("You don't have permission to manage wallets")
+        st.info("Required permission: can_update")
+        st.info("Contact an administrator or manager for wallet operations.")
+    else:
+        col1, col2 = st.columns(2)
         
-        # Get all users for dropdown
-        try:
-            users = db_utils.fetch_query("SELECT user_id, name, srn, wallet_balance FROM Users ORDER BY name")
+        with col1:
+            st.markdown("### Add Funds")
             
-            if not users.empty:
-                user_options = [f"{row['name']} ({row['srn']}) - ₹{row['wallet_balance']:.2f}" 
-                               for _, row in users.iterrows()]
-                user_ids = users['user_id'].tolist()
+            # Get all users for dropdown
+            try:
+                users = db_utils.fetch_query("SELECT user_id, name, srn, wallet_balance FROM Users ORDER BY name")
                 
-                selected_idx = st.selectbox(
-                    "Select User",
-                    range(len(user_options)),
-                    format_func=lambda x: user_options[x]
-                )
+                if not users.empty:
+                    user_options = [f"{row['name']} ({row['srn']}) - ₹{row['wallet_balance']:.2f}" 
+                                   for _, row in users.iterrows()]
+                    user_ids = users['user_id'].tolist()
+                    
+                    selected_idx = st.selectbox(
+                        "Select User",
+                        range(len(user_options)),
+                        format_func=lambda x: user_options[x]
+                    )
+                    
+                    selected_user_id = user_ids[selected_idx]
+                    selected_user_name = users.iloc[selected_idx]['name']
+                    current_balance = users.iloc[selected_idx]['wallet_balance']
+                    
+                    st.info(f"Current Balance: ₹{current_balance:.2f}")
+                    
+                    amount_to_add = st.number_input(
+                        "Amount to Add (₹)",
+                        min_value=1.0,
+                        max_value=10000.0,
+                        value=100.0,
+                        step=50.0
+                    )
+                    
+                    if access_control.create_permission_protected_button(
+                        "Add Funds",
+                        "can_update",
+                        key="add_funds_btn",
+                        use_container_width=True
+                    ):
+                        try:
+                            # Call stored procedure
+                            db_utils.call_procedure('add_funds_to_wallet', (selected_user_id, amount_to_add))
+                            
+                            # Get new balance
+                            new_balance = db_utils.call_function('get_wallet_balance', (selected_user_id,))
+                            
+                            st.success(f"Added ₹{amount_to_add:.2f} to {selected_user_name}'s wallet")
+                            st.success(f"New Balance: ₹{new_balance:.2f}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error adding funds: {e}")
+                else:
+                    st.warning("No users found in the database")
+            
+            except Exception as e:
+                st.error(f"Error loading users: {e}")
+        
+        with col2:
+            st.markdown("### Check Balance")
+            
+            try:
+                users = db_utils.fetch_query("SELECT user_id, name, srn FROM Users ORDER BY name")
                 
-                selected_user_id = user_ids[selected_idx]
-                selected_user_name = users.iloc[selected_idx]['name']
-                current_balance = users.iloc[selected_idx]['wallet_balance']
-                
-                st.info(f"Current Balance: ₹{current_balance:.2f}")
-                
-                amount_to_add = st.number_input(
-                    "Amount to Add (₹)",
-                    min_value=1.0,
-                    max_value=10000.0,
-                    value=100.0,
-                    step=50.0
-                )
-                
-                if st.button("Add Funds", use_container_width=True):
-                    try:
-                        # Call stored procedure
-                        db_utils.call_procedure('add_funds_to_wallet', (selected_user_id, amount_to_add))
-                        
-                        # Get new balance
-                        new_balance = db_utils.call_function('get_wallet_balance', (selected_user_id,))
-                        
-                        st.success(f"Added ₹{amount_to_add:.2f} to {selected_user_name}'s wallet")
-                        st.success(f"New Balance: ₹{new_balance:.2f}")
-                    except Exception as e:
-                        st.error(f"Error adding funds: {e}")
+                if not users.empty:
+                    user_options_check = [f"{row['name']} ({row['srn']})" 
+                                         for _, row in users.iterrows()]
+                    user_ids_check = users['user_id'].tolist()
+                    
+                    selected_idx_check = st.selectbox(
+                        "Select User to Check",
+                        range(len(user_options_check)),
+                        format_func=lambda x: user_options_check[x],
+                        key="check_balance"
+                    )
+                    
+                    selected_user_id_check = user_ids_check[selected_idx_check]
+                    selected_user_name_check = users.iloc[selected_idx_check]['name']
+                    
+                    if st.button("Check Balance", use_container_width=True):
+                        try:
+                            balance = db_utils.call_function('get_wallet_balance', (selected_user_id_check,))
+                            
+                            st.markdown(f"""
+                            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                        padding: 2rem; border-radius: 10px; text-align: center; color: white;'>
+                                <h3>{selected_user_name_check}</h3>
+                                <h1>₹{balance:.2f}</h1>
+                                <p>Current Wallet Balance</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        except Exception as e:
+                            st.error(f"Error checking balance: {e}")
+                else:
+                    st.warning("No users found in the database")
+            
+            except Exception as e:
+                st.error(f"Error loading users: {e}")
+        
+        st.markdown("---")
+        
+        # Recent wallet transactions
+        st.subheader("Recent Wallet Transactions")
+        
+        try:
+            transactions = db_utils.fetch_query("""
+                SELECT 
+                    u.name,
+                    u.srn,
+                    o.order_id,
+                    o.total_amount,
+                    o.payment_status,
+                    o.order_date
+                FROM Orders o
+                JOIN Users u ON o.user_id = u.user_id
+                WHERE o.payment_method = 'wallet'
+                ORDER BY o.order_date DESC
+                LIMIT 10
+            """)
+            
+            if not transactions.empty:
+                st.dataframe(transactions, use_container_width=True, hide_index=True)
             else:
-                st.warning("No users found in the database")
+                st.info("No recent wallet transactions")
         
         except Exception as e:
-            st.error(f"Error loading users: {e}")
-    
-    with col2:
-        st.markdown("### Check Balance")
-        
-        try:
-            users = db_utils.fetch_query("SELECT user_id, name, srn FROM Users ORDER BY name")
-            
-            if not users.empty:
-                user_options_check = [f"{row['name']} ({row['srn']})" 
-                                     for _, row in users.iterrows()]
-                user_ids_check = users['user_id'].tolist()
-                
-                selected_idx_check = st.selectbox(
-                    "Select User to Check",
-                    range(len(user_options_check)),
-                    format_func=lambda x: user_options_check[x],
-                    key="check_balance"
-                )
-                
-                selected_user_id_check = user_ids_check[selected_idx_check]
-                selected_user_name_check = users.iloc[selected_idx_check]['name']
-                
-                if st.button("Check Balance", use_container_width=True):
-                    try:
-                        balance = db_utils.call_function('get_wallet_balance', (selected_user_id_check,))
-                        
-                        st.markdown(f"""
-                        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                                    padding: 2rem; border-radius: 10px; text-align: center; color: white;'>
-                            <h3>{selected_user_name_check}</h3>
-                            <h1>₹{balance:.2f}</h1>
-                            <p>Current Wallet Balance</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    except Exception as e:
-                        st.error(f"Error checking balance: {e}")
-            else:
-                st.warning("No users found in the database")
-        
-        except Exception as e:
-            st.error(f"Error loading users: {e}")
-    
-    st.markdown("---")
-    
-    # Recent wallet transactions
-    st.subheader("Recent Wallet Transactions")
-    
-    try:
-        transactions = db_utils.fetch_query("""
-            SELECT 
-                u.name,
-                u.srn,
-                o.order_id,
-                o.total_amount,
-                o.payment_status,
-                o.order_date
-            FROM Orders o
-            JOIN Users u ON o.user_id = u.user_id
-            WHERE o.payment_method = 'wallet'
-            ORDER BY o.order_date DESC
-            LIMIT 10
-        """)
-        
-        if not transactions.empty:
-            st.dataframe(transactions, use_container_width=True, hide_index=True)
-        else:
-            st.info("No recent wallet transactions")
-    
-    except Exception as e:
-        st.error(f"Error loading transactions: {e}")
+            st.error(f"Error loading transactions: {e}")

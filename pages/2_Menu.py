@@ -5,10 +5,11 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import db_utils
 import config
+import access_control
 
 st.set_page_config(
     page_title="Menu Management",
-    page_icon="🍔",
+    page_icon="",
     layout="wide"
 )
 
@@ -93,11 +94,11 @@ with tab1:
             # Color code stock levels
             def stock_color(val):
                 if val <= 0:
-                    return '🔴 Out of Stock'
+                    return 'Out of Stock'
                 elif val <= 5:
-                    return f'🟡 Low ({val})'
+                    return f'Low ({val})'
                 else:
-                    return f'🟢 Good ({val})'
+                    return f'Good ({val})'
             
             menu_df['stock_status'] = menu_df['stock'].apply(stock_color)
             
@@ -126,7 +127,7 @@ with tab1:
             # Export option
             # csv = menu_df.to_csv(index=False)
             # st.download_button(
-            #     label="📥 Download Menu as CSV",
+            #     label="Download Menu as CSV",
             #     data=csv,
             #     file_name="menu_export.csv",
             #     mime="text/csv"
@@ -198,8 +199,11 @@ with tab1:
 with tab2:
     st.subheader("Add New Menu Item")
     
-    with st.form("add_menu_item_form"):
-        col1, col2 = st.columns(2)
+    if not db_utils.check_permission('can_create'):
+        st.error("You don't have permission to add menu items")
+    else:
+        with st.form("add_menu_item_form"):
+            col1, col2 = st.columns(2)
         
         with col1:
             item_name = st.text_input("Item Name *", placeholder="e.g., Masala Dosa")
@@ -228,7 +232,7 @@ with tab2:
             prep_time = st.number_input("Preparation Time (minutes)", min_value=1, value=10, step=1)
             is_available = st.checkbox("Available for Order", value=True)
         
-        submitted_item = st.form_submit_button("Add Menu Item", use_container_width=True)
+            submitted_item = st.form_submit_button("Add Menu Item", use_container_width=True)
         
         if submitted_item:
             if not item_name or selected_category_id is None:
@@ -282,9 +286,10 @@ with tab3:
                     format_func=lambda x: item_options[x]
                 )
                 
-                selected_item_id = item_ids[selected_item_idx]
-                current_stock = items.iloc[selected_item_idx]['stock']
-                item_name = items.iloc[selected_item_idx]['item_name']
+                selected_item_id = int(item_ids[selected_item_idx])
+                # cast values coming from pandas (numpy types) to native python types
+                current_stock = int(items.iloc[selected_item_idx]['stock'])
+                item_name = str(items.iloc[selected_item_idx]['item_name'])
                 
                 st.info(f"Current Stock: {current_stock} units")
                 
@@ -292,20 +297,21 @@ with tab3:
                 update_type = st.radio("Update Type", ["Add Stock", "Set Stock", "Reduce Stock"])
                 
                 if update_type == "Add Stock":
-                    quantity = st.number_input("Quantity to Add", min_value=1, value=10, step=1)
-                    new_stock = current_stock + quantity
+                    quantity = int(st.number_input("Quantity to Add", min_value=1, value=10, step=1))
+                    new_stock = int(current_stock + quantity)
                 elif update_type == "Set Stock":
-                    new_stock = st.number_input("New Stock Quantity", min_value=0, value=current_stock, step=1)
+                    new_stock = int(st.number_input("New Stock Quantity", min_value=0, value=current_stock, step=1))
                 else:  # Reduce Stock
-                    quantity = st.number_input("Quantity to Reduce", min_value=1, max_value=current_stock, value=1, step=1)
-                    new_stock = current_stock - quantity
+                    quantity = int(st.number_input("Quantity to Reduce", min_value=1, max_value=current_stock, value=1, step=1))
+                    new_stock = int(current_stock - quantity)
                 
                 st.info(f"New Stock will be: {new_stock} units")
                 
-                if st.button("🔄 Update Stock", use_container_width=True):
+                if access_control.create_permission_protected_button("Update Stock", "can_update", use_container_width=True):
                     try:
                         query = "UPDATE Menu_Items SET stock = %s WHERE item_id = %s"
-                        success = db_utils.execute_query(query, (new_stock, selected_item_id))
+                        # ensure parameters are native python types (no numpy.int64)
+                        success = db_utils.execute_query(query, (int(new_stock), int(selected_item_id)))
                         
                         if success:
                             st.success(f"Stock updated for '{item_name}'")
@@ -347,7 +353,7 @@ with tab3:
             out_of_stock_count = db_utils.fetch_query(
                 "SELECT COUNT(*) as count FROM Menu_Items WHERE stock = 0"
             )['count'][0]
-            st.metric("Out of Stock", out_of_stock_count, delta="🔴" if out_of_stock_count > 0 else None)
+            st.metric("Out of Stock", out_of_stock_count, delta="Alert" if out_of_stock_count > 0 else None)
         
         except Exception as e:
             st.error(f"Error loading stats: {e}")

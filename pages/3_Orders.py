@@ -13,7 +13,7 @@ import config
 
 st.set_page_config(
     page_title="Orders Management",
-    page_icon="📦",
+    page_icon="",
     layout="wide"
 )
 
@@ -84,15 +84,8 @@ with tab1:
             
             # Status badges with colors
             def status_badge(status):
-                colors = {
-                    'completed': '🟢',
-                    'pending': '🟡',
-                    'confirmed': '🔵',
-                    'preparing': '🟠',
-                    'ready': '🟣',
-                    'cancelled': '🔴'
-                }
-                return f"{colors.get(status, '⚪')} {status.upper()}"
+                # Return a plain-text status label without emoji
+                return status.upper()
             
             orders_df['status_display'] = orders_df['order_status'].apply(status_badge)
             
@@ -329,7 +322,7 @@ with tab3:
                     new_total = current_total + (item_price_add * quantity_add)
                     st.info(f"New Order Total: ₹{new_total:.2f}")
                     
-                    if st.button("➕ Add Item to Order", use_container_width=True):
+                    if st.button("Add Item to Order", use_container_width=True):
                         try:
                             db_utils.call_procedure(
                                 'add_item_to_order',
@@ -389,7 +382,7 @@ with tab3:
                     index=["pending", "completed", "failed", "refunded"].index(current_payment_status)
                 )
                 
-                if st.button("🔄 Update Status", use_container_width=True):
+                if st.button("Update Status", use_container_width=True):
                     try:
                         query = """
                         UPDATE Orders 

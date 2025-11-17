@@ -10,7 +10,7 @@ import config
 
 st.set_page_config(
     page_title="Reports & Analytics",
-    page_icon="📊",
+    page_icon="",
     layout="wide"
 )
 
